@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { loginSchema, registerSchema } from "@pharos/shared";
 import { config } from "../../config";
-import { HttpError } from "../../errors";
+import { HttpError } from "../../error";
 import * as auth from "./service";
 
 export const authRouter = Router();

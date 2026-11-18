@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import type { PoolClient } from "pg";
 import { pool, tx } from "../../db";
-import { HttpError } from "../../errors";
+import { HttpError } from "../../error";
 import { hashToken, newRefreshToken, signAccessToken } from "../../tokens";
 
 export type Session = { accessToken: string; refreshToken: string };

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { createMonitorSchema, updateMonitorSchema } from "@pharos/shared";
 import { pool } from "../../db";
-import { HttpError } from "../../errors";
+import { HttpError } from "../../error";
 import { requireAuth } from "../../middleware/auth";
 
 const MAX_MONITORS = 50;

@@ -6,7 +6,7 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { config } from "./config";
 import { pool } from "./db";
-import { errorHandler } from "./errors";
+import { errorHandler } from "./error";
 import { logger } from "./logger";
 import { authRouter } from "./modules/auth/routes";
 import { monitorsRouter } from "./modules/monitors/routes";
