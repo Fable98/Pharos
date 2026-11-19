@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { probeHttp } from "./probe";
 import { assertAllowedUrl, BlockedTargetError, guardedLookup, isPublicAddress } from "./ssrf";
+import { safePostJson } from "./safe-post";
 
 describe("packages/probe", () => {
   let server: http.Server;
@@ -15,6 +16,13 @@ describe("packages/probe", () => {
       if (url.pathname === "/ok") {
         res.writeHead(200, { "Content-Type": "text/plain" });
         res.end("hello pharos");
+      } else if (url.pathname === "/post") {
+        let b = "";
+        req.on("data", (chunk) => (b += chunk));
+        req.on("end", () => {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(b);
+        });
       } else if (url.pathname === "/slow") {
         setTimeout(() => {
           res.writeHead(200, { "Content-Type": "text/plain" });
@@ -215,6 +223,33 @@ describe("packages/probe", () => {
       });
       expect(res.ok).toBe(false);
       expect(res.errorCode).toBe("refused");
+    });
+  });
+
+  describe("safePostJson", () => {
+    it("posts JSON body and returns status + body without following redirects", async () => {
+      const res = await safePostJson(
+        `${serverUrl}/post`,
+        JSON.stringify({ hello: "world" }),
+        { "x-custom": "test" },
+        { allowPrivate: true }
+      );
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ hello: "world" });
+
+      const redirectRes = await safePostJson(
+        `${serverUrl}/redirect`,
+        "{}",
+        {},
+        { allowPrivate: true }
+      );
+      expect(redirectRes.status).toBe(302);
+    });
+
+    it("blocks private target when allowPrivate is false", async () => {
+      await expect(
+        safePostJson(`${serverUrl}/post`, "{}", {}, { allowPrivate: false })
+      ).rejects.toThrow(BlockedTargetError);
     });
   });
 });
