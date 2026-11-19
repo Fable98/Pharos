@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev:api": "pnpm --filter @pharos/api dev",
+    "dev:worker": "pnpm --filter @pharos/worker dev",
     "mock": "tsx infra/mock-target/server.ts",
     "migrate": "dotenv -e .env -- node-pg-migrate -m packages/db/migrations up",
     "test": "vitest run"
