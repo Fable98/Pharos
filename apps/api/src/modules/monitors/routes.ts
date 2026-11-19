@@ -52,6 +52,17 @@ const seriesQuerySchema = z.object({
   ),
 });
 
+const seriesQuerySchema = z.object({
+  from: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+  to: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+});
+
 export const monitorsRouter = Router();
 monitorsRouter.use(requireAuth);
 
@@ -227,6 +238,43 @@ monitorsRouter.get("/:id/uptime", async (req, res) => {
         uptimePct,
         avgLatencyMs,
     });
+});
+
+monitorsRouter.get("/:id/series", async (req, res) => {
+    const id = idParam.parse(req.params.id);
+    const q = seriesQuerySchema.parse(req.query);
+
+    const monitor = await pool.query(
+        `SELECT id FROM monitors WHERE id = $1 AND workspace_id = $2`,
+        [id, req.auth!.workspaceId]
+    );
+    if (!monitor.rows[0]) throw new HttpError(404, "not_found");
+
+    const toDate = q.to ? new Date(q.to) : new Date();
+    const fromDate = q.from
+        ? new Date(q.from)
+        : new Date(toDate.getTime() - 3 * 60 * 60 * 1000);
+
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    if (diffMs < 0 || diffMs > 24 * 60 * 60 * 1000) {
+        throw new HttpError(400, "range_too_large");
+    }
+
+    const { rows } = await pool.query(
+        `SELECT
+           bucket,
+           sum(checks)::int AS checks,
+           sum(failures)::int AS failures,
+           round(sum(latency_sum)::numeric / NULLIF(sum(latency_n), 0))::int AS "avgLatencyMs",
+           max(max_latency_ms) AS "maxLatencyMs"
+         FROM check_stats_1m
+         WHERE monitor_id = $1 AND bucket >= $2 AND bucket <= $3
+         GROUP BY bucket
+         ORDER BY bucket ASC`,
+        [id, fromDate, toDate]
+    );
+
+    res.json({ data: rows });
 });
 
 monitorsRouter.get("/:id/series", async (req, res) => {
