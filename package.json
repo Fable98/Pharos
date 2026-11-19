@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "dev:api": "pnpm --filter @pharos/api dev",
+    "dev:scheduler": "pnpm --filter @pharos/scheduler dev",
+    "dev:worker": "pnpm --filter @pharos/worker dev",
+    "mock": "tsx infra/mock-target/server.ts",
     "migrate": "dotenv -e .env -- node-pg-migrate -m packages/db/migrations up",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +27,8 @@
     "dotenv-cli": "^11.1.0",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1",
-    "typescript": "^7.0.2"
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^3.0.0"
   }
 }
