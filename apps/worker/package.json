@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@pharos/probe": "workspace:*",
+    "@pharos/queue": "workspace:*",
+    "ioredis": "^6.0.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "zod": "^3.25.76"
