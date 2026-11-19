@@ -194,6 +194,37 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@20.19.43)(jiti@2.7.0)(tsx@4.23.15)
 
+  apps/alert-engine:
+    dependencies:
+      '@pharos/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@pharos/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pino-pretty:
+        specifier: ^13.2.0
+        version: 13.2.0
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
   apps/api:
     dependencies:
       '@pharos/shared':
@@ -257,6 +288,37 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
+  apps/notifier:
+    dependencies:
+      '@pharos/probe':
+        specifier: workspace:*
+        version: link:../../packages/probe
+      '@pharos/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pino-pretty:
+        specifier: ^13.2.0
+        version: 13.2.0
       tsx:
         specifier: ^4.23.15
         version: 4.23.15

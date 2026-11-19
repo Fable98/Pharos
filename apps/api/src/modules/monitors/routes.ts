@@ -8,7 +8,10 @@ import { requireAuth } from "../../middleware/auth";
 const MAX_MONITORS = 50;
 const COLS = `id, workspace_id AS "workspaceId", type, name, url, method,
   interval_s AS "intervalS", timeout_ms AS "timeoutMs",
-  expected_status AS "expectedStatus", keyword, paused, created_at AS "createdAt"`;
+  expected_status AS "expectedStatus", keyword, paused, created_at AS "createdAt",
+  fail_threshold AS "failThreshold", recover_threshold AS "recoverThreshold",
+  degraded_latency_ms AS "degradedLatencyMs",
+  COALESCE((SELECT status FROM monitor_state WHERE monitor_id = monitors.id), 'unknown') AS status`;
 const idParam = z.string().uuid();
 
 const isoDateSchema = z
@@ -66,9 +69,21 @@ monitorsRouter.post("/", async (req, res) => {
     const count = await pool.query(`SELECT count(*)::int AS n FROM monitors WHERE workspace_id = $1`, [wid]);
     if (count.rows[0].n >= MAX_MONITORS) throw new HttpError(403, "monitor_limit_reached");
     const { rows } = await pool.query(
-        `INSERT INTO monitors (workspace_id, name, url, method, interval_s, timeout_ms, expected_status, keyword)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${COLS}`,
-        [wid, m.name, m.url, m.method, m.intervalS, m.timeoutMs, m.expectedStatus, m.keyword ?? null]
+        `INSERT INTO monitors (workspace_id, name, url, method, interval_s, timeout_ms, expected_status, keyword, fail_threshold, recover_threshold, degraded_latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING ${COLS}`,
+        [
+          wid,
+          m.name,
+          m.url,
+          m.method,
+          m.intervalS,
+          m.timeoutMs,
+          m.expectedStatus,
+          m.keyword ?? null,
+          m.failThreshold,
+          m.recoverThreshold,
+          m.degradedLatencyMs ?? null,
+        ]
     );
     res.status(201).json(rows[0]);
 });
@@ -91,9 +106,24 @@ monitorsRouter.patch("/:id", async (req, res) => {
        name = COALESCE($3, name), url = COALESCE($4, url), method = COALESCE($5, method),
        interval_s = COALESCE($6, interval_s), timeout_ms = COALESCE($7, timeout_ms),
        expected_status = COALESCE($8, expected_status), keyword = COALESCE($9, keyword),
+       fail_threshold = COALESCE($10, fail_threshold), recover_threshold = COALESCE($11, recover_threshold),
+       degraded_latency_ms = COALESCE($12, degraded_latency_ms),
        updated_at = now()
      WHERE id = $1 AND workspace_id = $2 RETURNING ${COLS}`,
-        [id, req.auth!.workspaceId, m.name, m.url, m.method, m.intervalS, m.timeoutMs, m.expectedStatus, m.keyword]
+        [
+          id,
+          req.auth!.workspaceId,
+          m.name,
+          m.url,
+          m.method,
+          m.intervalS,
+          m.timeoutMs,
+          m.expectedStatus,
+          m.keyword,
+          m.failThreshold,
+          m.recoverThreshold,
+          m.degradedLatencyMs,
+        ]
     );
     if (!rows[0]) throw new HttpError(404, "not_found");
     res.json(rows[0]);

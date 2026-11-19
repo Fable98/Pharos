@@ -7,7 +7,10 @@
     "dev:api": "pnpm --filter @pharos/api dev",
     "dev:scheduler": "pnpm --filter @pharos/scheduler dev",
     "dev:worker": "pnpm --filter @pharos/worker dev",
+    "dev:alerts": "pnpm --filter @pharos/alert-engine dev",
+    "dev:notifier": "pnpm --filter @pharos/notifier dev",
     "mock": "tsx infra/mock-target/server.ts",
+    "webhook": "tsx infra/mock-target/webhook-receiver.ts",
     "migrate": "dotenv -e .env -- node-pg-migrate -m packages/db/migrations up",
     "test": "vitest run"
   },

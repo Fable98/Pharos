@@ -10,6 +10,8 @@ import { errorHandler } from "./error";
 import { logger } from "./logger";
 import { authRouter } from "./modules/auth/routes";
 import { monitorsRouter } from "./modules/monitors/routes";
+import { channelsRouter } from "./modules/channels/routes";
+import { incidentsRouter } from "./modules/incidents/routes";
 
 export function buildApp() {
     const app = express();
@@ -43,6 +45,8 @@ export function buildApp() {
 
     app.use("/v1/auth", authRouter);
     app.use("/v1/monitors", monitorsRouter);
+    app.use("/v1/alert-channels", channelsRouter);
+    app.use("/v1/incidents", incidentsRouter);
     app.use((_req, res) => res.status(404).json({ error: { code: "not_found" } }));
     app.use(errorHandler);
     return app;
