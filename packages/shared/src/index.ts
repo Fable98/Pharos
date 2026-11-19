@@ -18,8 +18,16 @@ export const createMonitorSchema = z.object({
     timeoutMs: z.number().int().min(1000).max(30000).default(10000),
     expectedStatus: z.array(z.number().int().min(100).max(599)).min(1).max(10).default([200]),
     keyword: z.string().max(200).optional(),
+    failThreshold: z.number().int().min(1).max(10).default(3),
+    recoverThreshold: z.number().int().min(1).max(10).default(2),
+    degradedLatencyMs: z.number().int().min(100).max(60000).optional(),
 });
 
 export const updateMonitorSchema = createMonitorSchema.partial();
 
 export type CreateMonitorInput = z.infer<typeof createMonitorSchema>;
+export type UpdateMonitorInput = z.infer<typeof updateMonitorSchema>;
+
+export * from "./state-machine";
+export * from "./alerts";
+export * from "./channels";

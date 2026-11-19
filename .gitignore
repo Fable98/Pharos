@@ -1,7 +1,29 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Production / Build outputs
+dist/
+build/
+.next/
+
+# Environment files
 .env
-.next
+.env*.local
+*.env
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
 *.log
-cookies.txt
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# OS and IDE files
 .DS_Store
+cookies.txt

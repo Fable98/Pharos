@@ -13,6 +13,12 @@ import {
   reconcileSchedule,
   releaseLock,
   SCHEDULE_KEY,
+  publishResults,
+  ensureResultsGroup,
+  readResultEvents,
+  ackResultEvents,
+  RESULTS_STREAM,
+  RESULTS_GROUP,
 } from "./index";
 
 const url = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -117,6 +123,39 @@ describe("streams", () => {
     expect(taken.map((j) => j.monitorId)).toEqual(["a"]);
     await ackJobs(redis, taken.map((j) => j.streamId));
     const pending = (await redis.xpending(JOBS_STREAM, GROUP)) as unknown as [number];
+    expect(pending[0]).toBe(0);
+  });
+});
+
+describe("result events", () => {
+  it("round-trips one event (publish, read, check fields, ack)", async () => {
+    await ensureResultsGroup(redis);
+    const date = new Date(1700000000000);
+    await publishResults(redis, [
+      {
+        monitorId: "m-test",
+        time: date,
+        ok: true,
+        statusCode: 200,
+        latencyMs: 45,
+        errorCode: null,
+      },
+    ]);
+
+    const events = await readResultEvents(redis, "c-alert", 10, 100);
+    expect(events).toHaveLength(1);
+    expect(events[0].monitorId).toBe("m-test");
+    expect(events[0].atMs).toBe(1700000000000);
+    expect(events[0].ok).toBe(true);
+    expect(events[0].statusCode).toBe(200);
+    expect(events[0].latencyMs).toBe(45);
+    expect(events[0].errorCode).toBeNull();
+
+    await ackResultEvents(redis, [events[0].streamId]);
+    const pending = (await redis.xpending(
+      RESULTS_STREAM,
+      RESULTS_GROUP
+    )) as unknown as [number];
     expect(pending[0]).toBe(0);
   });
 });

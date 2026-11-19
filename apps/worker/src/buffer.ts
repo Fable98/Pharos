@@ -13,6 +13,7 @@ export interface CheckResultRow {
   tls_ms: number | null;
   ttfb_ms: number | null;
   error_code: string | null;
+  streamId: string;
 }
 
 export class ResultBuffer {
@@ -24,7 +25,10 @@ export class ResultBuffer {
   private readonly BATCH_SIZE = 500;
   private readonly FLUSH_INTERVAL_MS = 500;
 
-  constructor(private pool: pg.Pool) {
+  constructor(
+    private pool: pg.Pool,
+    private onFlushed?: (rows: CheckResultRow[]) => Promise<void>
+  ) {
     this.timer = setInterval(() => {
       this.triggerFlush();
     }, this.FLUSH_INTERVAL_MS);
@@ -101,6 +105,14 @@ export class ResultBuffer {
         ttfbMs,
         errorCodes,
       ]);
+
+      if (this.onFlushed) {
+        try {
+          await this.onFlushed(batch);
+        } catch (err) {
+          logger.error({ err }, "error in ResultBuffer onFlushed callback");
+        }
+      }
     } catch (err) {
       logger.error({ err, batchSize: batch.length }, "failed to flush check results, putting rows back");
       this.queue.unshift(...batch);

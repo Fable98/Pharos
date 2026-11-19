@@ -8,7 +8,10 @@ import { requireAuth } from "../../middleware/auth";
 const MAX_MONITORS = 50;
 const COLS = `id, workspace_id AS "workspaceId", type, name, url, method,
   interval_s AS "intervalS", timeout_ms AS "timeoutMs",
-  expected_status AS "expectedStatus", keyword, paused, created_at AS "createdAt"`;
+  expected_status AS "expectedStatus", keyword, paused, created_at AS "createdAt",
+  fail_threshold AS "failThreshold", recover_threshold AS "recoverThreshold",
+  degraded_latency_ms AS "degradedLatencyMs",
+  COALESCE((SELECT status FROM monitor_state WHERE monitor_id = monitors.id), 'unknown') AS status`;
 const idParam = z.string().uuid();
 
 const isoDateSchema = z
@@ -38,6 +41,28 @@ const uptimeQuerySchema = z.object({
   ),
 });
 
+const seriesQuerySchema = z.object({
+  from: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+  to: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+});
+
+const seriesQuerySchema = z.object({
+  from: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+  to: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    isoDateSchema.optional()
+  ),
+});
+
 export const monitorsRouter = Router();
 monitorsRouter.use(requireAuth);
 
@@ -55,9 +80,21 @@ monitorsRouter.post("/", async (req, res) => {
     const count = await pool.query(`SELECT count(*)::int AS n FROM monitors WHERE workspace_id = $1`, [wid]);
     if (count.rows[0].n >= MAX_MONITORS) throw new HttpError(403, "monitor_limit_reached");
     const { rows } = await pool.query(
-        `INSERT INTO monitors (workspace_id, name, url, method, interval_s, timeout_ms, expected_status, keyword)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${COLS}`,
-        [wid, m.name, m.url, m.method, m.intervalS, m.timeoutMs, m.expectedStatus, m.keyword ?? null]
+        `INSERT INTO monitors (workspace_id, name, url, method, interval_s, timeout_ms, expected_status, keyword, fail_threshold, recover_threshold, degraded_latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING ${COLS}`,
+        [
+          wid,
+          m.name,
+          m.url,
+          m.method,
+          m.intervalS,
+          m.timeoutMs,
+          m.expectedStatus,
+          m.keyword ?? null,
+          m.failThreshold,
+          m.recoverThreshold,
+          m.degradedLatencyMs ?? null,
+        ]
     );
     res.status(201).json(rows[0]);
 });
@@ -80,9 +117,24 @@ monitorsRouter.patch("/:id", async (req, res) => {
        name = COALESCE($3, name), url = COALESCE($4, url), method = COALESCE($5, method),
        interval_s = COALESCE($6, interval_s), timeout_ms = COALESCE($7, timeout_ms),
        expected_status = COALESCE($8, expected_status), keyword = COALESCE($9, keyword),
+       fail_threshold = COALESCE($10, fail_threshold), recover_threshold = COALESCE($11, recover_threshold),
+       degraded_latency_ms = COALESCE($12, degraded_latency_ms),
        updated_at = now()
      WHERE id = $1 AND workspace_id = $2 RETURNING ${COLS}`,
-        [id, req.auth!.workspaceId, m.name, m.url, m.method, m.intervalS, m.timeoutMs, m.expectedStatus, m.keyword]
+        [
+          id,
+          req.auth!.workspaceId,
+          m.name,
+          m.url,
+          m.method,
+          m.intervalS,
+          m.timeoutMs,
+          m.expectedStatus,
+          m.keyword,
+          m.failThreshold,
+          m.recoverThreshold,
+          m.degradedLatencyMs,
+        ]
     );
     if (!rows[0]) throw new HttpError(404, "not_found");
     res.json(rows[0]);
@@ -186,4 +238,78 @@ monitorsRouter.get("/:id/uptime", async (req, res) => {
         uptimePct,
         avgLatencyMs,
     });
+});
+
+monitorsRouter.get("/:id/series", async (req, res) => {
+    const id = idParam.parse(req.params.id);
+    const q = seriesQuerySchema.parse(req.query);
+
+    const monitor = await pool.query(
+        `SELECT id FROM monitors WHERE id = $1 AND workspace_id = $2`,
+        [id, req.auth!.workspaceId]
+    );
+    if (!monitor.rows[0]) throw new HttpError(404, "not_found");
+
+    const toDate = q.to ? new Date(q.to) : new Date();
+    const fromDate = q.from
+        ? new Date(q.from)
+        : new Date(toDate.getTime() - 3 * 60 * 60 * 1000);
+
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    if (diffMs < 0 || diffMs > 24 * 60 * 60 * 1000) {
+        throw new HttpError(400, "range_too_large");
+    }
+
+    const { rows } = await pool.query(
+        `SELECT
+           bucket,
+           sum(checks)::int AS checks,
+           sum(failures)::int AS failures,
+           round(sum(latency_sum)::numeric / NULLIF(sum(latency_n), 0))::int AS "avgLatencyMs",
+           max(max_latency_ms) AS "maxLatencyMs"
+         FROM check_stats_1m
+         WHERE monitor_id = $1 AND bucket >= $2 AND bucket <= $3
+         GROUP BY bucket
+         ORDER BY bucket ASC`,
+        [id, fromDate, toDate]
+    );
+
+    res.json({ data: rows });
+});
+
+monitorsRouter.get("/:id/series", async (req, res) => {
+    const id = idParam.parse(req.params.id);
+    const q = seriesQuerySchema.parse(req.query);
+
+    const monitor = await pool.query(
+        `SELECT id FROM monitors WHERE id = $1 AND workspace_id = $2`,
+        [id, req.auth!.workspaceId]
+    );
+    if (!monitor.rows[0]) throw new HttpError(404, "not_found");
+
+    const toDate = q.to ? new Date(q.to) : new Date();
+    const fromDate = q.from
+        ? new Date(q.from)
+        : new Date(toDate.getTime() - 3 * 60 * 60 * 1000);
+
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    if (diffMs < 0 || diffMs > 24 * 60 * 60 * 1000) {
+        throw new HttpError(400, "range_too_large");
+    }
+
+    const { rows } = await pool.query(
+        `SELECT
+           bucket,
+           sum(checks)::int AS checks,
+           sum(failures)::int AS failures,
+           round(sum(latency_sum)::numeric / NULLIF(sum(latency_n), 0))::int AS "avgLatencyMs",
+           max(max_latency_ms) AS "maxLatencyMs"
+         FROM check_stats_1m
+         WHERE monitor_id = $1 AND bucket >= $2 AND bucket <= $3
+         GROUP BY bucket
+         ORDER BY bucket ASC`,
+        [id, fromDate, toDate]
+    );
+
+    res.json({ data: rows });
 });
